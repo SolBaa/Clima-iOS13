@@ -7,16 +7,28 @@
 //
 
 import Foundation
+import CoreLocation
 
+protocol WeatherManagerDelegate{
+    func didUpdateWeather(_ weatherManager: WeatherManager, weather: WeatherModel)
+    func didFailWithError(error: Error)
+}
 
-struct WheatherManager {
+struct WeatherManager {
     let wheatherURL = "https://api.openweathermap.org/data/2.5/weather?appid=f830253bca15f51774667fb5d2aa8157&units=metric"
+    var delegate:  WeatherManagerDelegate?
+    
     func fetchWeather(cityName: String){
         let urlString = "\(wheatherURL)&q=\(cityName)"
-        perfomRequest(urlString: urlString)
+        perfomRequest(with: urlString)
+    }
+   
+    func fetchWeather(latitude: CLLocationDegrees, longitude: CLLocationDegrees){
+        let urlString = "\(wheatherURL)&lat=\(latitude)&lon=\(longitude)"
+        perfomRequest(with: urlString)
     }
     
-    func perfomRequest(urlString: String){
+    func perfomRequest(with urlString: String){
         //1. Create URL
         if let url = URL(string: urlString){
             //2. Create URLSession
@@ -24,19 +36,21 @@ struct WheatherManager {
             //3. Give a session a task
             let task = session.dataTask(with: url) { data, response, error in
                 if error != nil{
-                    print(error!)
+                    self.delegate?.didFailWithError(error: error!)
                     return
                 }
                 
                 if let safeData = data{
-                    self.parseJSON(wheatherData: safeData)
+                    if let weather =  self.parseJSON(safeData){
+                        self.delegate?.didUpdateWeather(self, weather: weather)
+                    }
                 }
             }
             //4. Start the task
             task.resume()
         }
     }
-    func parseJSON(wheatherData: Data){
+    func parseJSON(_ wheatherData: Data) -> WeatherModel?{
         let decoder = JSONDecoder()
         do{
             let decodedData = try decoder.decode(WeatherData.self, from: wheatherData)
@@ -46,8 +60,10 @@ struct WheatherManager {
             let weather = WeatherModel(conditionID: weatherID, cityName: cityName, temperaure: temperature)
             let iconImage =  weather.conditionName
             print(iconImage)
+            return weather
         }catch{
-            print(error)
+            delegate?.didFailWithError(error: error)
+            return nil
         }
         
     }
